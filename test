@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+import sys, subprocess, os, shutil
+
+try:
+    shutil.rmtree('current')
+except:
+    pass
+os.makedirs('current')
+with open('current/__init__.py', 'w') as f:
+    f.write(' ')
+subprocess.check_call(['unzip', 'ex4_additional_files.zip', '-d', 'current/'])
+subprocess.check_call(['unzip', sys.argv[1], '-d', 'current/'])
+#shutil.copytree('presubmit_externals','current/presubmit_externals')
+### Supress matplotlib figures if display not available ###
+if os.getenv('DISPLAY') is None or os.getenv('DISPLAY') == '':
+    import matplotlib
+    matplotlib.use('PS')
+###########
+sys.path.append(os.path.abspath('current/'))
+import ex4_presubmit
+ex4_presubmit.presubmit()
