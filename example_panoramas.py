@@ -12,9 +12,9 @@ def generate_panorama(data_dir, file_prefix, num_images, figsize=(20,20)):
   # Read images.
   ims = [sol4_utils.read_image(f,1) for f in files]
   # Extract feature point locations and descriptors.
-  def in_to_points(im):
+  def im_to_points(im):
     pyr,_ = sol4_utils.build_gaussian_pyramid(im, 3, 7)
-    return find_features(pyr)
+    return sol4.find_features(pyr)
   p_d = [im_to_points(im) for im in ims]
 
   # Compute homographies between successive pairs of images.

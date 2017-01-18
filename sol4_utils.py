@@ -20,10 +20,27 @@ def read_image(filename, representation):
 
     return im
 
+def calc_kernel_spatial(kernel_size):
+
+    dim1_kernel = np.array([1, 1]).astype(np.float32)
+    dim1_result_kernel = dim1_kernel
+
+    for i in range(kernel_size - 2):
+        dim1_result_kernel = sig_convolve(dim1_result_kernel, dim1_kernel)
+
+    dim1_result_kernel = dim1_result_kernel.reshape(1, dim1_result_kernel.size)
+
+    final_kernel = sig_convolve2d(dim1_result_kernel, np.transpose(
+        dim1_result_kernel)).astype(np.float32)
+
+    norm_final_kernel = final_kernel / np.sum(final_kernel)
+
+    return norm_final_kernel
+
 
 def blur_spatial(im, kernel_size):
 
-    kernel = calc_kernel(kernel_size)
+    kernel = calc_kernel_spatial(kernel_size)
 
     return sig_convolve2d(im, kernel, mode='same')
 
