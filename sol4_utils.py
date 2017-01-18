@@ -110,6 +110,8 @@ def build_laplacian_pyramid(im, max_levels, filter_size):
     laplac_pyr = []
 
     for i in range(len(gauss_pyr) - 1):
+        # print(gauss_pyr[i].shape)
+        # print(expand(gauss_pyr[i+1], filter_vec).shape)
         laplac_pyr.append(gauss_pyr[i] - expand(gauss_pyr[i+1], filter_vec))
 
     laplac_pyr.append(gauss_pyr[-1])
@@ -150,3 +152,9 @@ def pyramid_blending(im1, im2, mask, max_levels, filter_size_im,
     out_im = np.clip(out_im, 0, 1)
 
     return out_im
+
+
+
+
+def power_bit_length(x):
+    return 2 ** ((x).bit_length() - 1)

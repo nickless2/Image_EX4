@@ -4,6 +4,7 @@ import numpy as np
 from scipy.signal import convolve2d as convolve2d
 from scipy.ndimage import map_coordinates
 import matplotlib.pyplot as plt
+import math
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -160,30 +161,155 @@ def accumulate_homographies(H_successive, m):
     return H2m
 
 
+def render_panorama(ims, Hs):
+    panorama, pano_x, pano_y, strip_point = background_builder(ims, Hs)
+    for i in range(len(ims) - 1):
+        if i == 0:
+            left_overlap = 0
+            right_overlap = 10
+        elif i > 1 and i < len(ims):
+            left_overlap = 10
+            right_overlap = 10
+        else:
+            left_overlap = 10
+            right_overlap = 0
+
+        start = int(strip_point[i] - left_overlap)
+        end = int(strip_point[i + 1] + right_overlap)
+        strip_x = pano_x[:, start:end]
+        strip_y = pano_y[:, start:end]
+
+        # to check if replace this with meshgrid function
+        strip_x_2d = strip_x.flatten()
+        strip_x_2d = strip_x.reshape((len(strip_x_2d), 1))
+        strip_y_2d = strip_y.flatten()
+        strip_y_2d = strip_y.reshape((len(strip_y_2d), 1))
+        # strip_x_2d, strip_y_2d = np.meshgrid(strip_x, strip_y)
+
+        res = apply_homography(np.column_stack((strip_x_2d, strip_y_2d)),
+                               np.linalg.inv(Hs[i]))
+
+        worp_x = np.reshape(res[:, 0], (strip_x.shape[0], strip_x.shape[1]))
+        worp_y = np.reshape(res[:, 1], (strip_y.shape[0], strip_y.shape[1]))
+
+        im_new = map_coordinates(ims[i], [worp_y, worp_x], order=1,
+                                            prefilter=False)
+
+        im_new[np.isnan(im_new)] = 0
+
+        # panorama_temp = np.zeros((panorama.shape[0], panorama.shape[1]))
+        # print(im_new.shape)
+        # print(panorama_temp[:, start:end])
+        # panorama_temp[:, start:end]
+
+
+        mask_temp = np.ones((panorama.shape[0], panorama.shape[1]))
+        mask_temp[0:im_new.shape[0], int(strip_point[i]):end] = 0
+        rows_pad = power_bit_length(mask_temp.shape[0])
+        cols_pad = power_bit_length(mask_temp.shape[1])
+        panorama_temp = np.zeros((rows_pad, cols_pad))
+
+        mask_new = np.zeros((rows_pad, cols_pad))
+        print(mask_new.shape)
+        mask_new[0:mask_temp.shape[0], 0:mask_temp.shape[1]] = mask_temp
+        panorama_new = np.zeros((rows_pad, cols_pad))
+
+        panorama_new[0:panorama.shape[0], 0:panorama.shape[1]] = panorama
+        panorama_temp[0:im_new.shape[0],
+        0:im_new.shape[1]] = im_new  # print(panorama_new)
+        print(panorama_new.shape)
+        print(mask_new.shape)
+        print(panorama_temp.shape)
+        panorama = utils.pyramid_blending(panorama_new, panorama_temp,
+                                               mask_new, 5, 5, 5)
+
+        print("all ok")
+        return panorama
+
+
+
+def background_builder(ims, Hs):
+    """
+    makes black background for the concatenated image
+    """
+    ims_len = len(ims)
+    new_center = [0] * ims_len
+    new_corners = [0] * ims_len
+
+    for i in range(ims_len):
+        rows = ims[i].shape[0]
+        cols = ims[i].shape[1]
+
+        corners = np.zeros((4, 2))
+        corners[0] = np.array([0, 0])
+        corners[1] = np.array([rows-1, 0])
+        corners[2] = np.array([0, cols-1])
+        corners[3] = np.array([rows-1, cols-1])
+
+        new_corners[i] = apply_homography(corners, Hs[i])
+        middle = np.asarray([[cols/2, rows/2]])
+        new_center[i] = apply_homography(middle, Hs[i])
+
+    new_corners = np.asarray(new_corners)
+    new_corners = new_corners.reshape(new_corners.shape[0] *
+                                      new_corners.shape[1], 2)
+    new_center = np.asarray(new_center)
+    new_center = new_center.reshape(new_center.shape[0] *
+                                    new_center.shape[1], 2)
+
+    rows_min = np.floor(min(new_corners[:, 1])).astype(int)
+    rows_max = np.ceil(max(new_corners[:, 1])).astype(int)
+    cols_min = np.floor(min(new_corners[:, 0])).astype(int)
+    cols_max = np.ceil(max(new_corners[:, 0])).astype(int)
+
+    panorama_x, panorama_y = np.meshgrid(range(rows_min, rows_max),
+                                         range(cols_min, cols_max))
+
+    background = np.zeros(
+        ((rows_max - rows_min - 1), (cols_max - cols_min + 1)))
+
+    strip = np.ones(ims_len)
+    for i in range(ims_len - 1):
+        strip[i] = (np.floor(new_center[i, 0] +
+                             new_center[i+1, 0]) / 2).astype(int) + 1
+
+    strip = np.insert(strip, 0, rows_min)
+    strip = np.append(strip, rows_max)
+    strip = strip - strip[0] + 1
+
+    return background, panorama_x, panorama_y, strip
+
+
+# finds the closest power of 2
+def power_bit_length(x):
+    return 2**(x-1).bit_length()
+
 
 def main():
+    corner_1 = [1, 2]
+    x = np.array([1, 2,3])
+    print(corner_1[1])
+    print(x[1])
 
-
-
-    image = utils.read_image("external/oxford1.jpg", 1)
-
-    image2 = utils.read_image("external/oxford2.jpg", 1)
-
-    pyr = utils.build_gaussian_pyramid(image, 3, 3)[0]
-    pyr2 = utils.build_gaussian_pyramid(image2, 3, 3)[0]
-
-    corners1, desctiptors1 = find_features(pyr)
-    corners2, desctiptors2 = find_features(pyr2)
-    match1, match2 = match_features(desctiptors1, desctiptors2, 0.5)
-
-    H12, inliers = ransac_homography(corners1[match1, :], corners2[match2, :],
-                                     1000, 6)
-
-    # H22, inliers = ransac_homography(corners1[match3, :], corners2[match4, :],
+    # image = utils.read_image("external/oxford1.jpg", 1)
+    #
+    # image2 = utils.read_image("external/oxford2.jpg", 1)
+    #
+    # pyr = utils.build_gaussian_pyramid(image, 3, 3)[0]
+    # pyr2 = utils.build_gaussian_pyramid(image2, 3, 3)[0]
+    #
+    # corners1, desctiptors1 = find_features(pyr)
+    # corners2, desctiptors2 = find_features(pyr2)
+    # match1, match2 = match_features(desctiptors1, desctiptors2, 0.5)
+    #
+    # H12, inliers = ransac_homography(corners1[match1, :], corners2[match2, :],
     #                                  1000, 6)
-
-    display_matches(image, image2, corners1[match1, :], corners2[match2, :],
-                    inliers)
+    #
+    # # H22, inliers = ransac_homography(corners1[match3, :], corners2[match4, :],
+    # #                                  1000, 6)
+    #
+    # display_matches(image, image2, corners1[match1, :], corners2[match2, :],
+    #                 inliers)
 
 
 if __name__ == "__main__":
